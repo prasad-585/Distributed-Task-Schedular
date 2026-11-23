@@ -1,0 +1,69 @@
+databases:
+  - name: scheduler-db
+    plan: basic-256mb
+    databaseName: scheduler_db
+    user: scheduler_user
+
+services:
+  - type: keyvalue
+    name: scheduler-redis
+    plan: starter
+    ipAllowList: []
+
+  - type: web
+    name: scheduler-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: scheduler-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: scheduler-redis
+          type: keyvalue
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+
+  - type: worker
+    name: scheduler-background
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.services.scheduler
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: scheduler-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: scheduler-redis
+          type: keyvalue
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+
+  - type: worker
+    name: task-worker
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.services.worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: scheduler-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: scheduler-redis
+          type: keyvalue
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
